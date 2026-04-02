@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Cadastro de Professores - PJI310</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f2f5; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 30px; }
+        input, select { padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { grid-column: span 2; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; border: 1px solid #eee; text-align: left; }
+        th { background: #007bff; color: white; }
+    </style>
+</head>
+<body>
+<div class="nav-menu">
+    <a href="index.html">📅 Reservas</a>
+    <a href="professores.html">👩‍🏫 Professores</a>
+    <a href="carrinhos.html">💻 Carrinhos</a>
+</div>
+
+<style>
+    .nav-menu {
+        background: #2c3e50;
+        padding: 15px;
+        text-align: center;
+        margin-bottom: 20px;
+        border-radius: 8px;
+    }
+    .nav-menu a {
+        color: white;
+        text-decoration: none;
+        margin: 0 15px;
+        font-weight: bold;
+        font-size: 18px;
+    }
+    .nav-menu a:hover {
+        color: #3498db;
+    }
+</style>
+<div class="container">
+    <h1>👩‍🏫 Cadastro de Professores</h1>
+    <form id="formProfessor">
+        <input type="text" id="nome" placeholder="Nome Completo" required>
+        <input type="text" id="disciplina" placeholder="Disciplina (Ex: Biologia)" required>
+        <input type="email" id="email" placeholder="E-mail Institucional" required>
+        <input type="password" id="senha" placeholder="Senha de Acesso" required>
+        <select id="perfil">
+            <option value="Professor">Professor</option>
+            <option value="Gestor">Gestor (Coordenação)</option>
+        </select>
+        <button type="submit">Cadastrar Professor</button>
+    </form>
+
+    <h2>Equipe Cadastrada</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Disciplina</th>
+                <th>E-mail</th>
+                <th>Perfil</th>
+            </tr>
+        </thead>
+        <tbody id="listaProfessores"></tbody>
+    </table>
+</div>
+
+<script>
+    const API_URL = 'http://localhost:3000/api/professores';
+
+    async function carregarProfessores() {
+        const res = await fetch(API_URL);
+        const dados = await res.json();
+        const tabela = document.getElementById('listaProfessores');
+        tabela.innerHTML = dados.map(p => `
+            <tr>
+                <td>${p.id}</td>
+                <td>${p.nome}</td>
+                <td>${p.disciplina}</td>
+                <td>${p.email}</td>
+                <td><strong>${p.perfil}</strong></td>
+            </tr>
+        `).join('');
+    }
+
+    document.getElementById('formProfessor').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const novoProf = {
+            nome: document.getElementById('nome').value,
+            disciplina: document.getElementById('disciplina').value,
+            email: document.getElementById('email').value,
+            senha: document.getElementById('senha').value,
+            perfil: document.getElementById('perfil').value
+        };
+
+        const res = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(novoProf)
+        });
+
+        if (res.ok) {
+            alert("Professor cadastrado!");
+            document.getElementById('formProfessor').reset();
+            carregarProfessores();
+        }
+    });
+
+    carregarProfessores();
+</script>
+</body>
+</html>
