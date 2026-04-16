@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestão de Carrinhos - PJI310</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #e9ecef; margin: 0; padding: 20px; }
+        .container { max-width: 1150px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .nav-menu { background: #2c3e50; padding: 15px; text-align: center; margin-bottom: 25px; border-radius: 8px; }
+        .nav-menu a { color: white; text-decoration: none; margin: 0 20px; font-weight: bold; }
+        
+        h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        
+        /* Formulário de Cadastro */
+        .form-cadastro { display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 10px; background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #dee2e6; }
+        .form-cadastro input { padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
+        .btn-add { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; border: 1px solid #dee2e6; text-align: left; }
+        th { background: #343a40; color: white; }
+
+        .status-select { font-weight: bold; padding: 8px; border-radius: 4px; border: 2px solid #ccc; cursor: pointer; }
+        .status-disponivel { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
+        .status-indisponivel { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+        
+        .btn-save { background: #007bff; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <script>
+        // BLOQUEIO DE SEGURANÇA (ADMIN)
+        if (sessionStorage.getItem('auth') !== 'ok') {
+            const senha = prompt("Acesso Restrito. Digite a senha de ADMINISTRADOR:");
+            if (senha === "admin123") { 
+                sessionStorage.setItem('auth', 'ok'); 
+            } else { 
+                alert("Senha incorreta!"); 
+                window.location.href = "index.html"; 
+            }
+        }
+    </script>
+
+    <div class="container">
+        <div class="nav-menu">
+            <a href="index.html">📅 Reservas</a>
+            <a href="professores.html">👩‍🏫 Professores</a>
+            <a href="carrinhos.html">💻 Carrinhos</a>
+        </div>
+        
+        <h1>💻 Gestão de Laboratórios Móveis</h1>
+
+        <form id="formNovoCarrinho" class="form-cadastro">
+            <input type="text" id="novoNome" placeholder="Identificação (Ex: Carrinho C)" required>
+            <input type="number" id="novaQtd" placeholder="Qtd Notes" required>
+            <input type="text" id="novaObs" placeholder="Observações de Manutenção">
+            <button type="submit" class="btn-add">Cadastrar Novo</button>
+        </form>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Carrinho</th>
+                    <th>Qtd Notes</th>
+                    <th>Status</th>
+                    <th>Observações de Manutenção</th>
+                    <th>Ação</th>
+                </tr>
+            </thead>
+            <tbody id="listaCarrinhos"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api/carrinhos';
+
+        // CARREGAR LISTA
+        async function carregarCarrinhos() {
+            try {
+                const res = await fetch(API_URL);
+                const dados = await res.json();
+                const tabela = document.getElementById('listaCarrinhos');
+                
+                tabela.innerHTML = dados.map(c => {
+                    const classeStatus = c.status === 'Disponível' ? 'status-disponivel' : 'status-indisponivel';
+                    return `
+                    <tr>
+                        <td><strong>${c.identificacao}</strong></td>
+                        <td><input type="number" value="${c.quantidade_notebooks}" id="qtd-${c.id}" style="width:70px"></td>
+                        <td>
+                            <select id="status-${c.id}" class="status-select ${classeStatus}" onchange="mudarCor(this)">
+                                <option value="Disponível" ${c.status === 'Disponível' ? 'selected' : ''}>🟢 Disponível</option>
+                                <option value="Indisponível" ${c.status === 'Indisponível' ? 'selected' : ''}>🔴 Indisponível</option>
+                            </select>
+                        </td>
+                        <td><input type="text" value="${c.observacoes || ''}" id="obs-${c.id}" style="width:90%"></td>
+                        <td><button class="btn-save" onclick="atualizarCarrinho(${c.id})">Salvar</button></td>
+                    </tr>`;
+                }).join('');
+            } catch (err) {
+                console.error("Erro ao conectar com a API:", err);
+            }
+        }
+
+        // CADASTRAR NOVO
+        document.getElementById('formNovoCarrinho').onsubmit = async (e) => {
+            e.preventDefault();
+            const novo = {
+                identificacao: document.getElementById('novoNome').value,
+                quantidade_notebooks: parseInt(document.getElementById('novaQtd').value),
+                status: 'Disponível',
+                observacoes: document.getElementById('novaObs').value
+            };
+
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(novo)
+            });
+
+            if (res.ok) {
+                alert("Novo carrinho cadastrado!");
+                document.getElementById('formNovoCarrinho').reset();
+                carregarCarrinhos();
+            }
+        };
+
+        // ATUALIZAR EXISTENTE
+        async function atualizarCarrinho(id) {
+            const dados = {
+                quantidade_notebooks: parseInt(document.getElementById(`qtd-${id}`).value),
+                status: document.getElementById(`status-${id}`).value,
+                observacoes: document.getElementById(`obs-${id}`).value
+            };
+
+            await fetch(`${API_URL}/${id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(dados)
+            });
+            alert("Alterações salvas!");
+            carregarCarrinhos();
+        }
+
+        function mudarCor(select) {
+            select.className = select.value === 'Disponível' ? 'status-select status-disponivel' : 'status-select status-indisponivel';
+        }
+
+        carregarCarrinhos();
+    </script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Cadastro de Professores - PJI310</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #e9ecef; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .nav-menu { background: #2c3e50; padding: 15px; text-align: center; margin-bottom: 25px; border-radius: 8px; }
+        .nav-menu a { color: white; text-decoration: none; margin: 0 20px; font-weight: bold; }
+        
+        h1 { color: #333; border-bottom: 2px solid #28a745; padding-bottom: 10px; }
+        
+        .form-cadastro { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 10px; margin-bottom: 30px; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; }
+        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-family: Arial, sans-serif; }
+        
+        .btn-add { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-delete { background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border: 1px solid #dee2e6; text-align: left; font-size: 14px; }
+        th { background: #343a40; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-menu">
+            <a href="index.html">📅 Reservas</a>
+            <a href="professores.html">👩‍🏫 Professores</a>
+            <a href="carrinhos.html">💻 Carrinhos</a>
+        </div>
+        
+        <h1>👩‍🏫 Gestão da Equipe Docente</h1>
+
+        <form id="formProfessor" class="form-cadastro">
+            <input type="text" id="nomeProf" placeholder="Nome Completo" required>
+            <input type="text" id="discProf" placeholder="Disciplina" required>
+            <input type="email" id="emailProf" placeholder="E-mail" required>
+            <select id="perfilProf">
+                <option value="Professor">Professor</option>
+                <option value="Gestão">Gestão</option>
+            </select>
+            <button type="submit" class="btn-add">Cadastrar</button>
+        </form>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Disciplina</th>
+                    <th>E-mail</th>
+                    <th>Perfil</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="listaProfs"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api/professores';
+
+        async function carregarProfs() {
+            try {
+                const res = await fetch(API_URL);
+                const dados = await res.json();
+                const tabela = document.getElementById('listaProfs');
+                tabela.innerHTML = dados.map(p => `
+                    <tr>
+                        <td>${p.nome}</td>
+                        <td>${p.disciplina}</td>
+                        <td>${p.email || '---'}</td>
+                        <td>${p.perfil || 'Professor'}</td>
+                        <td><button class="btn-delete" onclick="deletarProf(${p.id})">Excluir</button></td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error("Erro ao carregar lista:", err);
+            }
+        }
+
+        document.getElementById('formProfessor').onsubmit = async (e) => {
+            e.preventDefault();
+            const novo = {
+                nome: document.getElementById('nomeProf').value,
+                disciplina: document.getElementById('discProf').value,
+                email: document.getElementById('emailProf').value,
+                perfil: document.getElementById('perfilProf').value
+            };
+
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(novo)
+            });
+
+            if (res.ok) {
+                document.getElementById('formProfessor').reset();
+                carregarProfs();
+            }
+        };
+
+        async function deletarProf(id) {
+            if(confirm("Deseja realmente excluir este cadastro?")) {
+                await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+                carregarProfs();
+            }
+        }
+
+        carregarProfs();
+    </script>
+</body>
+</html>

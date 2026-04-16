@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reserva de Carrinhos - PJI310</title>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; background-color: #e9ecef; margin: 0; padding: 20px; }
+        .container { max-width: 1100px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        
+        .nav-menu { background: #2c3e50; padding: 15px; text-align: center; margin-bottom: 25px; border-radius: 8px; }
+        .nav-menu a { color: white; text-decoration: none; margin: 0 20px; font-weight: bold; font-size: 16px; }
+        .nav-menu a:hover { color: #3498db; }
+
+        h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-top: 0; }
+        
+        .grid-form { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #dee2e6; }
+        label { font-weight: bold; color: #444; display: block; margin-bottom: 5px; font-size: 14px; }
+        select, input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-family: Arial, sans-serif; }
+        
+        .btn-reservar { grid-column: span 3; padding: 15px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 10px; font-family: Arial, sans-serif; }
+        .btn-reservar:hover { background-color: #218838; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; border: 1px solid #dee2e6; text-align: left; font-size: 14px; }
+        th { background-color: #343a40; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        
+        .btn-delete { background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-family: Arial, sans-serif; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-menu">
+            <a href="index.html">📅 Reservas</a>
+            <a href="professores.html">👩‍🏫 Professores</a>
+            <a href="carrinhos.html">💻 Carrinhos</a>
+        </div>
+        <h1>📅 Sistema de Reserva de Notebooks</h1>
+        <div class="grid-form" id="formReserva">
+            <div>
+                <label>Professor(a):</label>
+                <select id="selectProfessor"><option>Carregando...</option></select>
+            </div>
+            <div>
+                <label>Carrinho:</label>
+                <select id="selectCarrinho"><option>Carregando...</option></select>
+            </div>
+            <div>
+                <label>Data:</label>
+                <input type="date" id="data_reserva">
+            </div>
+            <div>
+                <label>Aula:</label>
+                <select id="aula_referencia">
+                    <option>1ª Aula</option><option>2ª Aula</option><option>3ª Aula</option>
+                    <option>4ª Aula</option><option>5ª Aula</option><option>6ª Aula</option>
+                </select>
+            </div>
+            <div>
+                <label>Turma:</label>
+                <input type="text" id="turma" placeholder="Ex: 3º Ano C">
+            </div>
+            <div>
+                <label>Tipo:</label>
+                <select id="tipo_reserva">
+                    <option value="Avulsa">Avulsa</option>
+                    <option value="Fixa">Fixa</option>
+                </select>
+            </div>
+            <button class="btn-reservar" onclick="realizarReserva()">Confirmar Agendamento</button>
+        </div>
+        <h2>🗓️ Quadro de Horários</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th><th>Aula</th><th>Carrinho</th><th>Professor</th><th>Turma</th><th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="tabelaReservas"></tbody>
+        </table>
+    </div>
+    <script>
+        const BASE_URL = 'http://localhost:3000/api';
+
+        async function inicializar() {
+            try {
+                const [rp, rc] = await Promise.all([
+                    fetch(`${BASE_URL}/professores`), 
+                    fetch(`${BASE_URL}/carrinhos`)
+                ]);
+                
+                const profs = await rp.json();
+                const todosCarrinhos = await rc.json();
+
+                // FILTRO: Apenas carrinhos com status 'Disponível' aparecem para reserva
+                const carrinhosDisponiveis = todosCarrinhos.filter(c => c.status === 'Disponível');
+
+                document.getElementById('selectProfessor').innerHTML = profs.map(p => 
+                    `<option value="${p.id}">${p.nome}</option>`).join('');
+                
+                // Valida se existem carrinhos para não deixar o select vazio
+                if (carrinhosDisponiveis.length > 0) {
+                    document.getElementById('selectCarrinho').innerHTML = carrinhosDisponiveis.map(c => 
+                        `<option value="${c.id}">${c.identificacao}</option>`).join('');
+                } else {
+                    document.getElementById('selectCarrinho').innerHTML = `<option value="">Nenhum disponível</option>`;
+                }
+
+                carregarReservas();
+            } catch (err) {
+                console.error("Erro ao carregar dados:", err);
+            }
+        }
+
+        async function carregarReservas() {
+            const res = await fetch(`${BASE_URL}/reservas`);
+            const dados = await res.json();
+            document.getElementById('tabelaReservas').innerHTML = dados.map(r => `
+                <tr>
+                    <td>${new Date(r.data_reserva).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
+                    <td>${r.aula_referencia}</td>
+                    <td>${r.carrinho_nome}</td>
+                    <td>${r.professor_nome}</td>
+                    <td>${r.turma}</td>
+                    <td><button class="btn-delete" onclick="excluirReserva(${r.id})">Excluir</button></td>
+                </tr>`).join('');
+        }
+
+        async function realizarReserva() {
+            const dados = {
+                professor_id: document.getElementById('selectProfessor').value,
+                carrinho_id: document.getElementById('selectCarrinho').value,
+                data_reserva: document.getElementById('data_reserva').value,
+                aula_referencia: document.getElementById('aula_referencia').value,
+                turma: document.getElementById('turma').value,
+                tipo_reserva: document.getElementById('tipo_reserva').value
+            };
+
+            if(!dados.carrinho_id) return alert("Selecione um carrinho disponível!");
+
+            const res = await fetch(`${BASE_URL}/reservas`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(dados)
+            });
+
+            if(res.ok) { 
+                alert("Reserva feita!"); 
+                carregarReservas(); 
+            } else { 
+                const err = await res.json(); 
+                alert(err.erro); 
+            }
+        }
+
+        async function excluirReserva(id) {
+            if(confirm("Excluir?")) {
+                await fetch(`${BASE_URL}/reservas/${id}`, {method: 'DELETE'});
+                carregarReservas();
+            }
+        }
+
+        inicializar();
+    </script>
+</body>
+</html>
