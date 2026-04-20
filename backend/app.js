@@ -25,6 +25,12 @@ app.get('/', (req, res) => {
     res.json({ mensagem: "API de Reserva de Carrinhos rodando perfeitamente!" });
 });
 
-app.listen(PORT, () => {
-    console.log(`Servidor rodando em http://localhost:${PORT}`);
-});
+// --- AJUSTE PARA TESTES (JEST) ---
+if (process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, () => {
+        console.log(`Servidor rodando em http://localhost:${PORT}`);
+    });
+}
+
+// Exporta o app para o Jest
+module.exports = app;

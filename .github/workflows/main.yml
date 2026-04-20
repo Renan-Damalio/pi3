@@ -1,0 +1,27 @@
+name: Node.js CI - PI3 Univesp
+
+# Define quando o GitHub deve agir
+on:
+  push:
+    branches: [ "main" ] # Sempre que você der um 'git push' na main
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Baixando o código do repositório
+      uses: actions/checkout@v4
+
+    - name: Configurando o Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20' # Versão que estamos usando
+
+    - name: Instalando dependências e rodando testes
+      run: |
+        cd backend
+        npm install
+        npm test

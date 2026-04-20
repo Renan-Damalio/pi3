@@ -7,25 +7,19 @@
     <style>
         body { font-family: Arial, Helvetica, sans-serif; background-color: #e9ecef; margin: 0; padding: 20px; }
         .container { max-width: 1100px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-        
         .nav-menu { background: #2c3e50; padding: 15px; text-align: center; margin-bottom: 25px; border-radius: 8px; }
         .nav-menu a { color: white; text-decoration: none; margin: 0 20px; font-weight: bold; font-size: 16px; }
         .nav-menu a:hover { color: #3498db; }
-
         h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-top: 0; }
-        
-        .grid-form { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #dee2e6; }
+        .grid-form { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #dee2e6; }
         label { font-weight: bold; color: #444; display: block; margin-bottom: 5px; font-size: 14px; }
         select, input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-family: Arial, sans-serif; }
-        
-        .btn-reservar { grid-column: span 3; padding: 15px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 10px; font-family: Arial, sans-serif; }
+        .btn-reservar { grid-column: span 4; padding: 15px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 10px; font-family: Arial, sans-serif; }
         .btn-reservar:hover { background-color: #218838; }
-
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { padding: 12px; border: 1px solid #dee2e6; text-align: left; font-size: 14px; }
         th { background-color: #343a40; color: white; }
         tr:nth-child(even) { background-color: #f9f9f9; }
-        
         .btn-delete { background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-family: Arial, sans-serif; }
     </style>
 </head>
@@ -37,7 +31,15 @@
             <a href="carrinhos.html">💻 Carrinhos</a>
         </div>
         <h1>📅 Sistema de Reserva de Notebooks</h1>
+        
         <div class="grid-form" id="formReserva">
+            <div>
+                <label>Segmento:</label>
+                <select id="segmento">
+                    <option value="Ensino Médio">Ensino Médio</option>
+                    <option value="Ensino Fundamental">Ensino Fundamental</option>
+                </select>
+            </div>
             <div>
                 <label>Professor(a):</label>
                 <select id="selectProfessor"><option>Carregando...</option></select>
@@ -55,11 +57,12 @@
                 <select id="aula_referencia">
                     <option>1ª Aula</option><option>2ª Aula</option><option>3ª Aula</option>
                     <option>4ª Aula</option><option>5ª Aula</option><option>6ª Aula</option>
+                    <option>7ª Aula</option>
                 </select>
             </div>
             <div>
                 <label>Turma:</label>
-                <input type="text" id="turma" placeholder="Ex: 3º Ano C">
+                <input type="text" id="turma" placeholder="Ex: 1º Ano B (Manual)">
             </div>
             <div>
                 <label>Tipo:</label>
@@ -70,6 +73,7 @@
             </div>
             <button class="btn-reservar" onclick="realizarReserva()">Confirmar Agendamento</button>
         </div>
+
         <h2>🗓️ Quadro de Horários</h2>
         <table>
             <thead>
@@ -80,6 +84,7 @@
             <tbody id="tabelaReservas"></tbody>
         </table>
     </div>
+
     <script>
         const BASE_URL = 'http://localhost:3000/api';
 
@@ -93,13 +98,11 @@
                 const profs = await rp.json();
                 const todosCarrinhos = await rc.json();
 
-                // FILTRO: Apenas carrinhos com status 'Disponível' aparecem para reserva
                 const carrinhosDisponiveis = todosCarrinhos.filter(c => c.status === 'Disponível');
 
                 document.getElementById('selectProfessor').innerHTML = profs.map(p => 
                     `<option value="${p.id}">${p.nome}</option>`).join('');
                 
-                // Valida se existem carrinhos para não deixar o select vazio
                 if (carrinhosDisponiveis.length > 0) {
                     document.getElementById('selectCarrinho').innerHTML = carrinhosDisponiveis.map(c => 
                         `<option value="${c.id}">${c.identificacao}</option>`).join('');
@@ -137,7 +140,9 @@
                 tipo_reserva: document.getElementById('tipo_reserva').value
             };
 
-            if(!dados.carrinho_id) return alert("Selecione um carrinho disponível!");
+            if(!dados.carrinho_id || !dados.data_reserva || !dados.turma) {
+                return alert("Preencha todos os campos, incluindo a Turma!");
+            }
 
             const res = await fetch(`${BASE_URL}/reservas`, {
                 method: 'POST',
@@ -155,7 +160,7 @@
         }
 
         async function excluirReserva(id) {
-            if(confirm("Excluir?")) {
+            if(confirm("Deseja realmente excluir esta reserva?")) {
                 await fetch(`${BASE_URL}/reservas/${id}`, {method: 'DELETE'});
                 carregarReservas();
             }
