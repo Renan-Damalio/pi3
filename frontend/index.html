@@ -129,7 +129,7 @@
                 const dados = await res.json();
                 
                 document.getElementById('tabelaReservas').innerHTML = dados.map(r => {
-                    // Lógica para o Dia da Semana
+                    // Lógica para o Dia da Semana baseada na string de data
                     const dataObj = new Date(r.data_reserva + 'T00:00:00');
                     const diaSemana = dataObj.toLocaleDateString('pt-BR', { weekday: 'long' });
                     const diaCapitalizado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
@@ -141,9 +141,9 @@
                             <span class="dia-semana">${diaCapitalizado}</span>
                         </td>
                         <td>${r.aula_referencia}</td>
-                        <td>${r.segmento || 'Não inf.'}</td>
-                        <td>${r.carrinho_nome || 'Carrinho'}</td>
-                        <td>${r.professor_nome || 'Professor'}</td>
+                        <td>${r.segmento || 'Ensino Médio'}</td>
+                        <td>${r.carrinho_nome || 'Indisponível'}</td>
+                        <td>${r.professor_nome || 'Indisponível'}</td>
                         <td>
                             ${r.turma} 
                             ${r.tipo_reserva === 'Fixa' ? '<span class="badge-fixa">FIXA</span>' : ''}
@@ -157,13 +157,14 @@
         }
 
         async function realizarReserva() {
+            // AJUSTE: Capturando o valor do ID 'segmento' corretamente
             const dados = {
                 professor_id: document.getElementById('selectProfessor').value,
                 carrinho_id: document.getElementById('selectCarrinho').value,
                 data_reserva: document.getElementById('data_reserva').value,
                 aula_referencia: document.getElementById('aula_referencia').value,
                 turma: document.getElementById('turma').value,
-                segmento: document.getElementById('segmento').value,
+                segmento: document.getElementById('segmento').value, // Envia o valor selecionado
                 tipo_reserva: document.getElementById('tipo_reserva').value
             };
 
