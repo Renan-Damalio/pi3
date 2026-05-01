@@ -1,49 +1,57 @@
-const express = require('express');
-const router = express.Router();
-const db = require('../database/db');
-
-// Listar todas as reservas (unindo dados de professor e carrinho)
-router.get('/', (req, res) => {
-    const query = `
-        SELECT r.*, p.nome as professor_nome, c.identificacao as carrinho_nome 
-        FROM reservas r
-        JOIN professores p ON r.professor_id = p.id
-        JOIN carrinhos c ON r.carrinho_id = c.id
-        ORDER BY r.data_reserva DESC, r.aula_referencia ASC
-    `;
-    db.all(query, [], (err, rows) => {
-        if (err) return res.status(500).json({ erro: err.message });
-        res.json(rows);
-    });
-});
-
-// Criar nova reserva com trava de segurança
 router.post('/', (req, res) => {
-    const { professor_id, carrinho_id, data_reserva, aula_referencia, turma, tipo_reserva } = req.body;
-    
-    // Verifica se o carrinho já está ocupado no mesmo dia e aula
-    const checkQuery = `SELECT id FROM reservas WHERE carrinho_id = ? AND data_reserva = ? AND aula_referencia = ?`;
-    
-    db.get(checkQuery, [carrinho_id, data_reserva, aula_referencia], (err, row) => {
-        if (row) {
-            return res.status(400).json({ erro: "Este carrinho já está reservado para este horário!" });
+    const { professor_id, carrinho_id, data_reserva, aula_referencia, turma, segmento, tipo_reserva } = req.body;
+
+    // 1. CÁLCULO DO DIA DA SEMANA ANTES DA VALIDAÇÃO (0 = Domingo, 1 = Segunda, etc.)
+    const dia_semana = new Date(data_reserva + 'T00:00:00').getDay();
+
+    // 2. LÓGICA DE VALIDAÇÃO APRIMORADA: 
+    // Isola o segmento (Fundamental não esbarra no Médio) e verifica os bloqueios temporais
+    const sqlVerificar = `
+        SELECT * FROM reservas 
+        WHERE carrinho_id = ? 
+        AND aula_referencia = ? 
+        AND segmento = ?
+        AND (
+            data_reserva = ? -- Cenário A: Mesma data exata ocupada
+            OR (tipo_reserva = 'Fixa' AND dia_semana = ?) -- Cenário B: Já existe uma reserva semanal neste dia
+            OR (? = 'Fixa' AND dia_semana = ? AND data_reserva >= ?) -- Cenário C: A nova é fixa, mas já tem datas futuras preenchidas
+        )
+    `;
+
+    // Parâmetros que alimentam as interrogações (?) do SQL acima
+    const parametrosVerificacao = [
+        carrinho_id, 
+        aula_referencia, 
+        segmento, 
+        data_reserva,  // Para conflito da mesma data
+        dia_semana,    // Para conflito com 'Fixa' existente
+        tipo_reserva,  // Para verificar se a tentativa atual é 'Fixa'
+        dia_semana,    // Para conflito com avulsas futuras no mesmo dia
+        data_reserva   // Limite de data para a verificação futura
+    ];
+
+    db.get(sqlVerificar, parametrosVerificacao, (err, row) => {
+        if (err) {
+            return res.status(500).json({ erro: "Erro ao verificar disponibilidade." });
         }
 
-        const insertQuery = `INSERT INTO reservas (professor_id, carrinho_id, data_reserva, aula_referencia, turma, tipo_reserva) VALUES (?, ?, ?, ?, ?, ?)`;
-        db.run(insertQuery, [professor_id, carrinho_id, data_reserva, aula_referencia, turma, tipo_reserva || 'Avulsa'], function(err) {
+        // Se 'row' existir, significa que barrou em alguma das regras (A, B ou C)
+        if (row) {
+            const tipoOcupacao = row.tipo_reserva === 'Fixa' ? 'Fixa (Semanal)' : 'Avulsa';
+            return res.status(400).json({ 
+                erro: `Reserva bloqueada: O ${segmento} já possui uma reserva ${tipoOcupacao} neste carrinho e horário.` 
+            });
+        }
+
+        // 3. SE PASSAR NA VALIDAÇÃO, FAZ O INSERT
+        const sqlInsert = `
+            INSERT INTO reservas (professor_id, carrinho_id, data_reserva, aula_referencia, turma, segmento, tipo_reserva, dia_semana) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        db.run(sqlInsert, [professor_id, carrinho_id, data_reserva, aula_referencia, turma, segmento, tipo_reserva, dia_semana], function(err) {
             if (err) return res.status(500).json({ erro: err.message });
-            res.status(201).json({ mensagem: "Reserva confirmada!", id: this.lastID });
+            res.status(201).json({ id: this.lastID, mensagem: "Reserva realizada com sucesso!" });
         });
     });
 });
-// Rota para EXCLUIR uma reserva
-router.delete('/:id', (req, res) => {
-    const { id } = req.params;
-    const query = `DELETE FROM reservas WHERE id = ?`;
-
-    db.run(query, [id], function(err) {
-        if (err) return res.status(500).json({ erro: "Erro ao excluir reserva." });
-        res.json({ mensagem: "Reserva removida com sucesso!" });
-    });
-});
-module.exports = router;
