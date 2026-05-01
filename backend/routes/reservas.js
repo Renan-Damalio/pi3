@@ -4,8 +4,8 @@ router.post('/', (req, res) => {
     // 1. CÁLCULO DO DIA DA SEMANA ANTES DA VALIDAÇÃO (0 = Domingo, 1 = Segunda, etc.)
     const dia_semana = new Date(data_reserva + 'T00:00:00').getDay();
 
-    // 2. LÓGICA DE VALIDAÇÃO APRIMORADA: 
-    // Isola o segmento (Fundamental não esbarra no Médio) e verifica os bloqueios temporais
+    // 2. LÓGICA DE VALIDAÇÃO APRIMORADA COM STRFTIME: 
+    // Isola o segmento (Fundamental não esbarra no Médio) e verifica os bloqueios temporais de forma nativa no banco
     const sqlVerificar = `
         SELECT * FROM reservas 
         WHERE carrinho_id = ? 
@@ -13,8 +13,8 @@ router.post('/', (req, res) => {
         AND segmento = ?
         AND (
             data_reserva = ? -- Cenário A: Mesma data exata ocupada
-            OR (tipo_reserva = 'Fixa' AND dia_semana = ?) -- Cenário B: Já existe uma reserva semanal neste dia
-            OR (? = 'Fixa' AND dia_semana = ? AND data_reserva >= ?) -- Cenário C: A nova é fixa, mas já tem datas futuras preenchidas
+            OR (tipo_reserva = 'Fixa' AND strftime('%w', data_reserva) = strftime('%w', ?) AND data_reserva <= ?) -- Cenário B: Já existe uma Fixa que começou antes ou na mesma data
+            OR (? = 'Fixa' AND strftime('%w', data_reserva) = strftime('%w', ?) AND data_reserva >= ?) -- Cenário C: A nova é fixa, mas já tem datas futuras preenchidas
         )
     `;
 
@@ -23,11 +23,9 @@ router.post('/', (req, res) => {
         carrinho_id, 
         aula_referencia, 
         segmento, 
-        data_reserva,  // Para conflito da mesma data
-        dia_semana,    // Para conflito com 'Fixa' existente
-        tipo_reserva,  // Para verificar se a tentativa atual é 'Fixa'
-        dia_semana,    // Para conflito com avulsas futuras no mesmo dia
-        data_reserva   // Limite de data para a verificação futura
+        data_reserva, // Para Cenário A: conflito da mesma data
+        data_reserva, data_reserva, // Para Cenário B: compara o dia da semana e garante que a fixa existente é anterior ou igual
+        tipo_reserva, data_reserva, data_reserva // Para Cenário C: verifica se a tentativa atual é 'Fixa', compara dia da semana e olha para o futuro
     ];
 
     db.get(sqlVerificar, parametrosVerificacao, (err, row) => {
