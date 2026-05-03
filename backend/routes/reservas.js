@@ -1,57 +1,61 @@
 router.post('/', (req, res) => {
     const { professor_id, carrinho_id, data_reserva, aula_referencia, turma, segmento, tipo_reserva } = req.body;
 
-    // Trava de segurança para garantir que a requisição está completa
     if (!segmento) return res.status(400).json({ erro: "Erro: O segmento é obrigatório." });
 
-    // Node.js calcula o dia da semana novo (0 a 6)
-    const dataNovaObj = new Date(data_reserva + 'T00:00:00');
-    const diaSemanaNovo = dataNovaObj.getDay(); 
+    // 1. CÁLCULO SEGURO DE DATA: Força o horário para o MEIO-DIA em UTC.
+    // Isso impede que o fuso horário do servidor mude a data para o dia anterior.
+    const dataNova = new Date(data_reserva + 'T12:00:00Z');
+    const diaSemanaNovo = dataNova.getUTCDay(); 
 
-    // 1. Puxamos do banco TODAS as reservas apenas deste Carrinho e desta Aula
-    const sqlBusca = `SELECT * FROM reservas WHERE carrinho_id = ? AND aula_referencia = ?`;
+    // 2. BUSCA GERAL: Trazemos tudo do carrinho e ignoramos a filtragem falha do SQLite
+    const sqlBusca = `SELECT * FROM reservas WHERE carrinho_id = ?`;
 
-    db.all(sqlBusca, [carrinho_id, aula_referencia], (err, reservasExistentes) => {
-        if (err) return res.status(500).json({ erro: "Erro ao consultar o banco de dados." });
+    db.all(sqlBusca, [carrinho_id], (err, reservas) => {
+        if (err) return res.status(500).json({ erro: "Erro no banco de dados." });
 
         let conflito = null;
 
-        // 2. LÓGICA DE VALIDAÇÃO EM JAVASCRIPT (Imune a falhas de tipagem do SQLite)
-        for (let r of reservasExistentes) {
-            
-            // REGRA 1 (Isolamento): Ensino Médio e Fundamental não se enxergam.
-            // Se a reserva do banco for de um segmento diferente da atual, pula para a próxima.
-            if (r.segmento !== segmento) continue;
+        for (let r of reservas) {
+            // NORMALIZAÇÃO DE TEXTO: Corta espaços invisíveis e protege contra dados nulos antigos
+            const dbAula = String(r.aula_referencia).trim();
+            const reqAula = String(aula_referencia).trim();
+            const dbSegmento = String(r.segmento || 'Ensino Médio').trim();
+            const reqSegmento = String(segmento).trim();
 
-            // Recalculamos o dia da semana da reserva gravada para ignorar a coluna do banco
-            const dataBancoObj = new Date(r.data_reserva + 'T00:00:00');
-            const diaSemanaBanco = dataBancoObj.getDay();
+            // Se for outra aula ou outro segmento, ignora e vai para a próxima linha
+            if (dbAula !== reqAula) continue;
+            if (dbSegmento !== reqSegmento) continue;
 
-            // Cenário A: Choque exato de data
+            // Calcula o dia da semana da reserva salva no banco de forma segura
+            const dataBanco = new Date(r.data_reserva + 'T12:00:00Z');
+            const diaSemanaBanco = dataBanco.getUTCDay();
+
+            // Regra A: Choque exato de data
             if (r.data_reserva === data_reserva) {
                 conflito = r; break;
             }
 
-            // Cenário B: Já existe uma reserva FIXA no passado/hoje que bloqueia esta semana
+            // Regra B: Já existe uma Fixa que foi criada antes ou na mesma data
             if (r.tipo_reserva === 'Fixa' && diaSemanaBanco === diaSemanaNovo && r.data_reserva <= data_reserva) {
                 conflito = r; break;
             }
 
-            // Cenário C: Tentativa de criar uma FIXA hoje, mas já existe agendamento futuro
+            // Regra C: Tentando criar Fixa hoje, mas já existe avulsa lançada no futuro
             if (tipo_reserva === 'Fixa' && diaSemanaBanco === diaSemanaNovo && r.data_reserva >= data_reserva) {
                 conflito = r; break;
             }
         }
 
-        // Se o JavaScript encontrou um conflito, ele barra o acesso imediatamente
+        // Se encontrou qualquer conflito nas regras acima, bloqueia imediatamente
         if (conflito) {
             const tipoMsg = conflito.tipo_reserva === 'Fixa' ? 'Fixa (Semanal)' : 'Avulsa';
             return res.status(400).json({ 
-                erro: `Bloqueado: O ${segmento} já possui uma reserva ${tipoMsg} neste carrinho para esta data ou dia da semana.` 
+                erro: `Bloqueado: O ${segmento} já possui uma reserva ${tipoMsg} para a ${aula_referencia} neste dia.` 
             });
         }
 
-        // 3. Se passou invicto pela validação, grava no banco!
+        // 3. GRAVAÇÃO NO BANCO
         const sqlInsert = `
             INSERT INTO reservas (professor_id, carrinho_id, data_reserva, aula_referencia, turma, segmento, tipo_reserva, dia_semana) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
