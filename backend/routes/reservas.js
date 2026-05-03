@@ -3,12 +3,11 @@ router.post('/', (req, res) => {
 
     if (!segmento) return res.status(400).json({ erro: "Erro: O segmento é obrigatório." });
 
-    // 1. CÁLCULO SEGURO DE DATA: Força o horário para o MEIO-DIA em UTC.
-    // Isso impede que o fuso horário do servidor mude a data para o dia anterior.
+    // Força o horário para o MEIO-DIA em UTC para evitar bugs de fuso horário
     const dataNova = new Date(data_reserva + 'T12:00:00Z');
     const diaSemanaNovo = dataNova.getUTCDay(); 
 
-    // 2. BUSCA GERAL: Trazemos tudo do carrinho e ignoramos a filtragem falha do SQLite
+    // Busca apenas pelo carrinho (ignorando textos problemáticos no SQL)
     const sqlBusca = `SELECT * FROM reservas WHERE carrinho_id = ?`;
 
     db.all(sqlBusca, [carrinho_id], (err, reservas) => {
@@ -17,17 +16,19 @@ router.post('/', (req, res) => {
         let conflito = null;
 
         for (let r of reservas) {
-            // NORMALIZAÇÃO DE TEXTO: Corta espaços invisíveis e protege contra dados nulos antigos
-            const dbAula = String(r.aula_referencia).trim();
-            const reqAula = String(aula_referencia).trim();
-            const dbSegmento = String(r.segmento || 'Ensino Médio').trim();
-            const reqSegmento = String(segmento).trim();
+            // 🛡️ BLINDAGEM DE ENCODING 1: Extrai APENAS os números da aula (Ex: "1ª Aula" vira "1")
+            const aulaDb = String(r.aula_referencia).replace(/\D/g, "");
+            const aulaReq = String(aula_referencia).replace(/\D/g, "");
+            
+            // 🛡️ BLINDAGEM DE ENCODING 2: Simplifica o segmento para 'ef' (Fundamental) ou 'em' (Médio)
+            const segDb = String(r.segmento).toLowerCase().includes('fundamental') ? 'ef' : 'em';
+            const segReq = String(segmento).toLowerCase().includes('fundamental') ? 'ef' : 'em';
 
-            // Se for outra aula ou outro segmento, ignora e vai para a próxima linha
-            if (dbAula !== reqAula) continue;
-            if (dbSegmento !== reqSegmento) continue;
+            // Se for outra aula ou outro segmento, eles não se cruzam. Pula para o próximo!
+            if (aulaDb !== aulaReq) continue;
+            if (segDb !== segReq) continue;
 
-            // Calcula o dia da semana da reserva salva no banco de forma segura
+            // Datas do banco
             const dataBanco = new Date(r.data_reserva + 'T12:00:00Z');
             const diaSemanaBanco = dataBanco.getUTCDay();
 
@@ -37,25 +38,25 @@ router.post('/', (req, res) => {
             }
 
             // Regra B: Já existe uma Fixa que foi criada antes ou na mesma data
-            if (r.tipo_reserva === 'Fixa' && diaSemanaBanco === diaSemanaNovo && r.data_reserva <= data_reserva) {
+            if (r.tipo_reserva === 'Fixa' && diaSemanaBanco === diaSemanaNovo && dataBanco <= dataNova) {
                 conflito = r; break;
             }
 
             // Regra C: Tentando criar Fixa hoje, mas já existe avulsa lançada no futuro
-            if (tipo_reserva === 'Fixa' && diaSemanaBanco === diaSemanaNovo && r.data_reserva >= data_reserva) {
+            if (tipo_reserva === 'Fixa' && diaSemanaBanco === diaSemanaNovo && dataBanco >= dataNova) {
                 conflito = r; break;
             }
         }
 
-        // Se encontrou qualquer conflito nas regras acima, bloqueia imediatamente
+        // Se o loop acima encontrou um conflito, barramos aqui.
         if (conflito) {
             const tipoMsg = conflito.tipo_reserva === 'Fixa' ? 'Fixa (Semanal)' : 'Avulsa';
             return res.status(400).json({ 
-                erro: `Bloqueado: O ${segmento} já possui uma reserva ${tipoMsg} para a ${aula_referencia} neste dia.` 
+                erro: `Bloqueado: A ${aula_referencia} já possui uma reserva ${tipoMsg} para o ${segmento} neste carrinho e dia da semana.` 
             });
         }
 
-        // 3. GRAVAÇÃO NO BANCO
+        // Se chegou até aqui, está 100% livre. Grava no banco com os textos originais bonitinhos.
         const sqlInsert = `
             INSERT INTO reservas (professor_id, carrinho_id, data_reserva, aula_referencia, turma, segmento, tipo_reserva, dia_semana) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
