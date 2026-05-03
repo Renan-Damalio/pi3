@@ -1,11 +1,16 @@
 router.post('/', (req, res) => {
     const { professor_id, carrinho_id, data_reserva, aula_referencia, turma, segmento, tipo_reserva } = req.body;
 
+    // TRAVA DE SEGURANÇA: Garante que o segmento não chegue vazio do Frontend
+    if (!segmento) {
+        return res.status(400).json({ erro: "Erro: O segmento escolar é obrigatório." });
+    }
+
     // 1. CÁLCULO DO DIA DA SEMANA ANTES DA VALIDAÇÃO (0 = Domingo, 1 = Segunda, etc.)
     const dia_semana = new Date(data_reserva + 'T00:00:00').getDay();
 
-    // 2. LÓGICA DE VALIDAÇÃO APRIMORADA COM STRFTIME: 
-    // Isola o segmento (Fundamental não esbarra no Médio) e verifica os bloqueios temporais de forma nativa no banco
+    // 2. LÓGICA DE VALIDAÇÃO APRIMORADA: 
+    // Isola o segmento (Fundamental não esbarra no Médio) e verifica os bloqueios temporais usando o Node.js
     const sqlVerificar = `
         SELECT * FROM reservas 
         WHERE carrinho_id = ? 
@@ -13,8 +18,8 @@ router.post('/', (req, res) => {
         AND segmento = ?
         AND (
             data_reserva = ? -- Cenário A: Mesma data exata ocupada
-            OR (tipo_reserva = 'Fixa' AND strftime('%w', data_reserva) = strftime('%w', ?) AND data_reserva <= ?) -- Cenário B: Já existe uma Fixa que começou antes ou na mesma data
-            OR (? = 'Fixa' AND strftime('%w', data_reserva) = strftime('%w', ?) AND data_reserva >= ?) -- Cenário C: A nova é fixa, mas já tem datas futuras preenchidas
+            OR (tipo_reserva = 'Fixa' AND dia_semana = ? AND data_reserva <= ?) -- Cenário B: Já existe uma Fixa que começou antes ou na mesma data
+            OR (? = 'Fixa' AND dia_semana = ? AND data_reserva >= ?) -- Cenário C: A nova é fixa, mas já tem datas futuras preenchidas
         )
     `;
 
@@ -24,8 +29,8 @@ router.post('/', (req, res) => {
         aula_referencia, 
         segmento, 
         data_reserva, // Para Cenário A: conflito da mesma data
-        data_reserva, data_reserva, // Para Cenário B: compara o dia da semana e garante que a fixa existente é anterior ou igual
-        tipo_reserva, data_reserva, data_reserva // Para Cenário C: verifica se a tentativa atual é 'Fixa', compara dia da semana e olha para o futuro
+        dia_semana, data_reserva, // Para Cenário B: compara o dia da semana e garante que a fixa existente é anterior ou igual
+        tipo_reserva, dia_semana, data_reserva // Para Cenário C: verifica se a tentativa atual é 'Fixa', compara dia da semana e olha para o futuro
     ];
 
     db.get(sqlVerificar, parametrosVerificacao, (err, row) => {
@@ -37,7 +42,8 @@ router.post('/', (req, res) => {
         if (row) {
             const tipoOcupacao = row.tipo_reserva === 'Fixa' ? 'Fixa (Semanal)' : 'Avulsa';
             return res.status(400).json({ 
-                erro: `Reserva bloqueada: O ${segmento} já possui uma reserva ${tipoOcupacao} neste carrinho e horário.` 
+                // Alterado para row.segmento para mostrar exatamente o que está gravado no banco
+                erro: `Reserva bloqueada: O ${row.segmento} já possui uma reserva ${tipoOcupacao} neste carrinho e horário.` 
             });
         }
 
