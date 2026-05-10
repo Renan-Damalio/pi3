@@ -1,4 +1,5 @@
 router.post('/', (req, res) => {
+    console.log("DADOS RECEBIDOS DO FRONTEND:", req.body);
     const { professor_id, carrinho_id, data_reserva, aula_referencia, turma, segmento, tipo_reserva } = req.body;
 
     if (!segmento) return res.status(400).json({ erro: "O segmento é obrigatório." });
