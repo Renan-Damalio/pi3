@@ -129,7 +129,6 @@
                 const dados = await res.json();
                 
                 document.getElementById('tabelaReservas').innerHTML = dados.map(r => {
-                    // Lógica para o Dia da Semana baseada na string de data
                     const dataObj = new Date(r.data_reserva + 'T00:00:00');
                     const diaSemana = dataObj.toLocaleDateString('pt-BR', { weekday: 'long' });
                     const diaCapitalizado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
@@ -157,14 +156,13 @@
         }
 
         async function realizarReserva() {
-            // AJUSTE: Capturando o valor do ID 'segmento' corretamente
             const dados = {
                 professor_id: document.getElementById('selectProfessor').value,
                 carrinho_id: document.getElementById('selectCarrinho').value,
                 data_reserva: document.getElementById('data_reserva').value,
                 aula_referencia: document.getElementById('aula_referencia').value,
                 turma: document.getElementById('turma').value,
-                segmento: document.getElementById('segmento').value, // Envia o valor selecionado
+                segmento: document.getElementById('segmento').value,
                 tipo_reserva: document.getElementById('tipo_reserva').value
             };
 
@@ -180,15 +178,16 @@
                 });
 
                 if(res.ok) { 
-                    // Substitua esta parte dentro do try/catch
-                        if(res.ok) { 
-                            const sucesso = await res.json();
-                            alert(sucesso.mensagem); // Agora vai exibir a mensagem real enviada pelo backend!
-                            carregarReservas(); 
-                        } else { 
-                            const err = await res.json(); 
-                            alert("Erro: " + (err.erro || "Falha ao reservar"));        
+                    const sucesso = await res.json();
+                    alert(sucesso.mensagem); // Agora vai exibir a mensagem real enviada pelo backend!
+                    carregarReservas(); 
+                } else { 
+                    const err = await res.json(); 
+                    alert("Erro: " + (err.erro || "Falha ao reservar")); 
                 }
+            } catch (err) {
+                alert("Erro de conexão com o servidor.");
+            }
         }
 
         async function excluirReserva(id) {
