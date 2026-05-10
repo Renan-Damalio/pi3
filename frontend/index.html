@@ -180,15 +180,15 @@
                 });
 
                 if(res.ok) { 
-                    alert("Reserva feita com sucesso!"); 
-                    carregarReservas(); 
-                } else { 
-                    const err = await res.json(); 
-                    alert("Erro: " + (err.erro || "Falha ao reservar")); 
+                    // Substitua esta parte dentro do try/catch
+                        if(res.ok) { 
+                            const sucesso = await res.json();
+                            alert(sucesso.mensagem); // Agora vai exibir a mensagem real enviada pelo backend!
+                            carregarReservas(); 
+                        } else { 
+                            const err = await res.json(); 
+                            alert("Erro: " + (err.erro || "Falha ao reservar"));        
                 }
-            } catch (err) {
-                alert("Erro de conexão com o servidor.");
-            }
         }
 
         async function excluirReserva(id) {
