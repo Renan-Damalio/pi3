@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database'); // Mantido o seu caminho original que está funcionando
+const db = require('../database/db'); // Mantido o seu caminho original que está funcionando
 
 // ROTA GET: Buscar todas as reservas
 router.get('/', (req, res) => {
