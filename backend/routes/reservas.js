@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database'); // Ajuste o caminho se o seu database.js estiver em outro lugar
+const db = require('../database'); // Mantido o seu caminho original que está funcionando
 
 // ROTA GET: Buscar todas as reservas
 router.get('/', (req, res) => {
@@ -17,31 +17,29 @@ router.get('/', (req, res) => {
     });
 });
 
-// ROTA POST: Criar nova reserva (Com suporte a Reserva Fixa até o fim do ano)
+// ROTA POST: Criar nova reserva
 router.post('/', (req, res) => {
     const { professor_id, carrinho_id, data_reserva, aula_referencia, turma, segmento, tipo_reserva } = req.body;
 
     if (!segmento) return res.status(400).json({ erro: "O segmento é obrigatório." });
 
-    // 1. GERADOR DE SEQUÊNCIA
-    const isFixa = String(tipo_reserva).trim().toLowerCase() === 'fixa';
+    // 1. BLINDAGEM MÁXIMA PARA IDENTIFICAR A RESERVA FIXA
+    const isFixa = String(tipo_reserva).toLowerCase().includes('fixa');
+    
     const datasParaReservar = [];
     let dataAtual = new Date(data_reserva + 'T12:00:00Z');
     const anoReferencia = dataAtual.getUTCFullYear();
     const dataLimite = new Date(`${anoReferencia}-12-31T12:00:00Z`);
 
     if (isFixa) {
-        // Se for fixa, vai somando 7 dias até 31 de dezembro
         while (dataAtual <= dataLimite) {
             datasParaReservar.push(dataAtual.toISOString().split('T')[0]);
             dataAtual.setUTCDate(dataAtual.getUTCDate() + 7);
         }
     } else {
-        // Se for avulsa, grava só uma data
         datasParaReservar.push(data_reserva);
     }
 
-    // 2. VERIFICA SE ALGUMA DESSAS DATAS JÁ ESTÁ OCUPADA
     const placeholders = datasParaReservar.map(() => '?').join(',');
     const sqlCheck = `
         SELECT data_reserva FROM reservas 
@@ -59,7 +57,6 @@ router.post('/', (req, res) => {
             return res.status(400).json({ erro: `Bloqueado: O dia ${dataErro} já está ocupado para este carrinho.` });
         }
 
-        // 3. GRAVA TUDO DE UMA VEZ SÓ NO BANCO DE DADOS
         let sqlInsert = `INSERT INTO reservas (professor_id, carrinho_id, data_reserva, aula_referencia, turma, segmento, tipo_reserva, dia_semana) VALUES `;
         let valuesArr = [];
         let params = [];
@@ -67,14 +64,19 @@ router.post('/', (req, res) => {
         datasParaReservar.forEach(dataStr => {
             const diaSemana = new Date(dataStr + 'T12:00:00Z').getUTCDay();
             valuesArr.push("(?, ?, ?, ?, ?, ?, ?, ?)");
-            params.push(professor_id, carrinho_id, dataStr, aula_referencia, turma, segmento, tipo_reserva, diaSemana);
+            const tipoGravado = isFixa ? 'Fixa' : 'Avulsa';
+            params.push(professor_id, carrinho_id, dataStr, aula_referencia, turma, segmento, tipoGravado, diaSemana);
         });
 
         sqlInsert += valuesArr.join(', ');
 
         db.run(sqlInsert, params, function(err) {
             if (err) return res.status(500).json({ erro: "Erro ao salvar as reservas." });
-            res.status(201).json({ mensagem: "Reservas criadas com sucesso!" });
+            
+            // O MARCADOR ESTÁ AQUI:
+            res.status(201).json({ 
+                mensagem: `MARCADOR: O sistema gerou e validou ${datasParaReservar.length} reserva(s) com sucesso até o fim do ano!` 
+            });
         });
     });
 });
